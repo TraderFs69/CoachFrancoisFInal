@@ -11,10 +11,9 @@ st.set_page_config(
 )
 
 st.title("📈 Swing Scanner S&P 500 – Edge Score Swing")
-st.caption("Méthodologie Trading en Action | Swing trading robuste")
 
 # ─────────────────────────
-# PARAMÈTRES UTILISATEUR
+# PARAMÈTRES
 # ─────────────────────────
 direction = st.selectbox(
     "Direction du scan",
@@ -44,15 +43,13 @@ risk_pct = st.slider(
 run_scan = st.button("🚀 Lancer le scan")
 
 # ─────────────────────────
-# CHARGEMENT UNIVERS
+# UNIVERS
 # ─────────────────────────
 tickers = load_sp500_universe()
-
 if not tickers:
     st.stop()
 
 tickers = tickers[:max_tickers]
-st.caption(f"{len(tickers)} tickers analysés")
 
 # ─────────────────────────
 # SCAN
@@ -61,51 +58,35 @@ results = []
 
 if run_scan:
     with st.spinner("Scan en cours..."):
+
         for ticker in tickers:
 
             df = get_polygon_data(ticker)
-
             if df is None or len(df) < 250:
                 continue
 
             df = compute_indicators(df)
             last = df.iloc[-1]
 
-            # ───────── Swing conditions
-            long_conditions = [
-                last.Close > last.EMA50,
-                last.EMA50 > last.EMA200,
-                last.MACD > last.MACD_signal,
-                last.MACD_hist > 0,
-                last.RSI >= 50,
-                last.ADX >= 20,
-                last.Volume > last.Volume_MA20
-            ]
-
-            short_conditions = [
-                last.Close < last.EMA50,
-                last.EMA50 < last.EMA200,
-                last.MACD < last.MACD_signal,
-                last.MACD_hist < 0,
-                last.RSI <= 50,
-                last.ADX >= 20,
-                last.Volume > last.Volume_MA20
-            ]
-
-            swing_long = sum(long_conditions) >= 6
-            swing_short = sum(short_conditions) >= 6
-
-            # ───────── Edge Score
-            score = 0
-
+            # ───── Bias EMA (direction principale)
             if last.EMA50 > last.EMA200 and last.Close > last.EMA50:
-                score += 30
                 bias = "LONG"
             elif last.EMA50 < last.EMA200 and last.Close < last.EMA50:
-                score += 30
                 bias = "SHORT"
             else:
                 bias = "NEUTRE"
+
+            # ───── Filtre directionnel
+            if direction == "LONG" and bias != "LONG":
+                continue
+            if direction == "SHORT" and bias != "SHORT":
+                continue
+
+            # ───── Edge Score
+            score = 0
+
+            if bias in ["LONG", "SHORT"]:
+                score += 30
 
             score += 25 if abs(last.MACD_hist) > 0 else 0
 
@@ -123,12 +104,7 @@ if run_scan:
             if score < min_score:
                 continue
 
-            if direction == "LONG" and not swing_long:
-                continue
-            if direction == "SHORT" and not swing_short:
-                continue
-
-            # ───────── Position sizing ATR
+            # ───── Position sizing ATR
             risk_amount = capital * (risk_pct / 100)
             stop_distance = 1.5 * last.ATR
             position_size = int(risk_amount / stop_distance) if stop_distance > 0 else 0
@@ -137,8 +113,6 @@ if run_scan:
                 "Ticker": ticker,
                 "Bias": bias,
                 "Edge Score": score,
-                "Swing Long": swing_long,
-                "Swing Short": swing_short,
                 "Close": round(last.Close, 2),
                 "RSI": round(last.RSI, 1),
                 "ADX": round(last.ADX, 1),
@@ -149,7 +123,7 @@ if run_scan:
             })
 
 # ─────────────────────────
-# AFFICHAGE & EXPORT
+# AFFICHAGE
 # ─────────────────────────
 if results:
     df_results = (
