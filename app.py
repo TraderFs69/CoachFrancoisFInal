@@ -46,7 +46,12 @@ run_scan = st.button("🚀 Lancer le scan")
 # ─────────────────────────
 # CHARGEMENT UNIVERS
 # ─────────────────────────
-tickers = load_sp500_universe()[:max_tickers]
+tickers = load_sp500_universe()
+
+if not tickers:
+    st.stop()
+
+tickers = tickers[:max_tickers]
 st.caption(f"{len(tickers)} tickers analysés")
 
 # ─────────────────────────
